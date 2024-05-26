@@ -30,5 +30,5 @@ remembers a value $v$ assigned to some variable $x$. When $x$ is refering to the
 then we have $v \in \rho(x)(\delta_1)$ because of basic application constraints).
 "Induction step" is the new rule they added to an application case:
 $$[e_1^{l_1} e_2^{l_1}]$$
-$$\forall (\lambda x. e_0, \delta_0) \in C(e_1)(\delta_2) \ \forall y \in FV(\lambda x.e_0) \
-\rho(y)(\delta_0) \subseteq \rho(y)(\delta_2+l)$$
+$$\forall (\lambda x. e_0, \delta_0) \in C(e_1)(\delta_2) \ \forall y \in FV(\lambda x.e_0)
+\ \rho(y)(\delta_0) \subseteq \rho(y)(\delta_2+l)$$
