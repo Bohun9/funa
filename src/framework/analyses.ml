@@ -34,8 +34,9 @@ module CallAnalysisMonotoneInstance : MonotoneInstance = struct
         (Lab (e.label, ci.cxt), cache e1.label ci.cxt)
         :: (Lab (e.label, ci.cxt), cache e2.label ci.cxt)
         :: FuncSet.fold
-             (fun (Func (l0, x, e0)) acc ->
-               (Lab (e.label, ci.cxt), FuncSet.singleton (Func (l0, x, e0)))
+             (fun (Func (l0, x, e0, cxt0)) acc ->
+               ( Lab (e.label, ci.cxt),
+                 FuncSet.singleton (Func (l0, x, e0, cxt0)) )
                :: acc)
              (cache_cfg e1.label ci.cxt)
              []

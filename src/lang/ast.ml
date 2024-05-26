@@ -3,6 +3,8 @@
 type var = string
 type label = int
 
+module VarSet = Set.Make (String)
+
 let var_to_string x = x
 let label_to_string = string_of_int
 
@@ -77,3 +79,20 @@ let rec _vars_of_expr (e : expr) : var list =
 
 let vars_of_expr (e : expr) : var list =
   List.sort_uniq compare (_vars_of_expr e)
+
+let rec free_vars_of_expr (e : expr) : VarSet.t =
+  match e.data with
+  | EInt _ | EBool _ -> VarSet.empty
+  | EVar x -> VarSet.singleton x
+  | EApp (e1, e2) | EBinop (_, e1, e2) ->
+      VarSet.union (free_vars_of_expr e1) (free_vars_of_expr e2)
+  | EIf (e1, e2, e3) ->
+      VarSet.union
+        (VarSet.union (free_vars_of_expr e1) (free_vars_of_expr e2))
+        (free_vars_of_expr e3)
+  | EUnop (_, e1) -> free_vars_of_expr e1
+  | ELet (x, e1, e2) ->
+      VarSet.remove x
+        (VarSet.union (free_vars_of_expr e1) (free_vars_of_expr e2))
+  | ELam (x, e1) -> VarSet.remove x (free_vars_of_expr e1)
+  | ERec (f, x, e1) -> VarSet.remove f (VarSet.remove x (free_vars_of_expr e1))

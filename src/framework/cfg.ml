@@ -17,18 +17,25 @@ module CFG : MonotoneInstance = struct
     let env = env st in
     match e.data with
     | ELam (x, b) ->
-        [ (Lab (e.label, ci.cxt), FuncSet.singleton (Func (e.label, x, b))) ]
+        [
+          ( Lab (e.label, ci.cxt),
+            FuncSet.singleton (Func (e.label, x, b, ci.cxt)) );
+        ]
     | ERec (s, x, b) ->
         [
-          (Lab (e.label, ci.cxt), FuncSet.singleton (Func (e.label, x, b)));
-          (Var (s, ci.cxt), FuncSet.singleton (Func (e.label, x, b)));
+          ( Lab (e.label, ci.cxt),
+            FuncSet.singleton (Func (e.label, x, b, ci.cxt)) );
+          (Var (s, ci.cxt), FuncSet.singleton (Func (e.label, x, b, ci.cxt)));
         ]
     | EApp (e1, e2) ->
         FuncSet.fold
-          (fun (Func (l0, x, e0)) acc ->
+          (fun (Func (l0, x, e0, cxt0) as f) acc ->
             (Var (x, ci.push e.label), cache e2.label ci.cxt)
             :: (Lab (e.label, ci.cxt), cache e0.label (ci.push e.label))
-            :: acc)
+            :: acc
+            @ VarSet.fold
+                (fun y acc -> (Var (y, cxt0), env y (ci.push e.label)) :: acc)
+                (free_vars_of_fun f) [])
           (cache e1.label ci.cxt) []
     | _ -> []
 

@@ -15,7 +15,7 @@ type domain = Lab of label * context | Var of var * context
 type 'a state = (domain, 'a) Hashtbl.t
 
 (* Type for functions for the control flow analysis *)
-type func = Func of label * var * expr
+type func = Func of label * var * expr * context
 
 module FuncSet = Set.Make (struct
   type t = func
@@ -25,8 +25,8 @@ end)
 
 let funcset_to_string (s : FuncSet.t) : string =
   FuncSet.to_list s
-  |> List.map (fun (Func (l, _, _)) -> label_to_string l)
-  |> String.concat "," |> Printf.sprintf "{%s}"
+  |> List.map (fun (Func (l, _, _, _)) -> label_to_string l)
+  |> List.sort_uniq compare |> String.concat "," |> Printf.sprintf "{%s}"
 
 (* Type for a result of the control flow analysis *)
 type cfg = FuncSet.t state

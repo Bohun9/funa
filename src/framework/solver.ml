@@ -38,8 +38,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
 
     let cxt_push cxt l =
       let cxt = cxt @ [ l ] in
-      if List.length cxt <= Params.k then cxt
-      else cxt |> List.rev |> List.tl |> List.rev
+      if List.length cxt <= Params.k then cxt else List.tl cxt
 
     let result : MI.t state =
       let r = Hashtbl.create 127 in
@@ -68,7 +67,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
           | ELet (x, e1, _) -> [ (Var (x, cxt), cache e1.label cxt) ]
           | EApp (e1, e2) ->
               FuncSet.fold
-                (fun (Func (_, x, _)) acc ->
+                (fun (Func (_, x, _, _)) acc ->
                   (Var (x, cxt_push cxt e.label), cache e2.label cxt) :: acc)
                 (cache_cfg e1.label cxt) []
           | ELam (_, _) -> []
@@ -92,13 +91,30 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
           | ELet (_, _, e2) -> [ (Lab (e.label, cxt), cache e2.label cxt) ]
           | EApp (e1, _) ->
               FuncSet.fold
-                (fun (Func (_, _, e0)) acc ->
+                (fun (Func (_, _, e0, _)) acc ->
                   ( Lab (e.label, cxt_push cxt e.label),
                     cache e0.label (cxt_push cxt e.label) )
                   :: acc)
                 (cache_cfg e1.label cxt) []
           | EUnop (_, _) | EBinop (_, _, _) -> [])
         [] contexts
+
+    let implicit_app_changes (e : expr) : MI.t changes =
+      match e.data with
+      | EApp (e1, e2) ->
+          List.fold_left
+            (fun acc cxt ->
+              acc
+              @ FuncSet.fold
+                  (fun (Func (_, _, e0, ctx0) as f) acc ->
+                    VarSet.fold
+                      (fun y acc ->
+                        (Var (y, ctx0), env y (cxt_push cxt e.label)) :: acc)
+                      (free_vars_of_fun f) []
+                    @ acc)
+                  (cache_cfg e1.label cxt) [])
+            [] contexts
+      | _ -> []
 
     let rec collect_changes (e : expr) : MI.t changes =
       let changes_explicit = explicit_changes e in
@@ -109,6 +125,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
         if MI.gen_flow_constraints then implicit_flow_changes e else []
       in
       let changes_implicit = changes_implicit_var @ changes_implicit_flow in
+      let changes_implicit_app = implicit_app_changes e in
       let changes_down =
         match e.data with
         | EInt _ | EBool _ | EVar _ -> []
@@ -118,7 +135,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
             collect_changes e1 @ collect_changes e2
         | ELam (_, e1) | ERec (_, _, e1) | EUnop (_, e1) -> collect_changes e1
       in
-      changes_explicit @ changes_implicit @ changes_down
+      changes_explicit @ changes_implicit @ changes_down @ changes_implicit_app
 
     let apply_changes (changes : MI.t changes) : bool =
       List.fold_left
