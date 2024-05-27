@@ -4,4 +4,4 @@ let fact = fn rec fact n =>
   else 
     n * fact (n - 1)
 in 
-fact 4
+fact 5

@@ -31,13 +31,15 @@ struct
   let results_rows (l : label) : string =
     match results with
     | None -> ""
-    | Some _ ->
-        List.fold_left
-          (fun ac (cxt, y) ->
-            Printf.sprintf "%s    <TR> <TD>%s</TD> <TD>%s</TD> </TR>\n" ac
-              (context_to_string cxt) y)
-          ""
-          (Hashtbl.find label_results l)
+    | Some _ -> (
+        try
+          List.fold_left
+            (fun ac (cxt, y) ->
+              Printf.sprintf "%s    <TR> <TD>%s</TD> <TD>%s</TD> </TR>\n" ac
+                (context_to_string cxt) y)
+            ""
+            (Hashtbl.find label_results l)
+        with Not_found -> "")
 
   let node_stmt label text =
     Printf.sprintf

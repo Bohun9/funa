@@ -11,6 +11,12 @@ let context_to_string cxt =
 (* Domain of the analysis *)
 type domain = Lab of label * context | Var of var * context
 
+let domain_to_string (d : domain) : string =
+  match d with
+  | Lab (l, cxt) ->
+      Printf.sprintf "L%s %s" (string_of_int l) (context_to_string cxt)
+  | Var (x, cxt) -> Printf.sprintf "V%s %s" x (context_to_string cxt)
+
 (* State of the analysis contaning both the abstract cache and the abstract environment *)
 type 'a state = (domain, 'a) Hashtbl.t
 
@@ -34,11 +40,22 @@ type cfg = FuncSet.t state
 (* Type of a record passed to the constraints function containing a currect context and a push function *)
 type cxt_info = { cxt : context; push : label -> context }
 
+(* Dependences of transition function *)
+type dependences = domain list
+
 (* Type for a list of changes *)
-type 'a changes = (domain * 'a) list
+type 'a change = domain * 'a * dependences
+type 'a changes = 'a change list
 
 (* Type for specifying implicit flow constarints *)
 type flow_constr_specifier = FCAll | FCAllWithoutIf | FCNone
+
+(* Type of cache *)
+type 'a cache = label -> context -> 'a
+type cache_cfg = FuncSet.t cache
+
+(* Type of environment *)
+type 'a env = var -> context -> 'a
 
 module type MonotoneInstance = sig
   (* Type of elements of the lattice *)
@@ -59,7 +76,8 @@ module type MonotoneInstance = sig
   (* This function will be called for every subexpression in the program
      and given current state of the analysis it should generate changes
      that will be included via the join operations *)
-  val constraints : cfg -> expr -> t state -> cxt_info -> t changes
+  val constraints :
+    FuncSet.t cache -> expr -> t cache * t env -> cxt_info -> t changes
 
   (* The following options affect generating implicit constraints *)
 
@@ -78,7 +96,7 @@ module type MonotoneInstance = sig
 
   (* Whether to analyse branches of the if in the specific context *)
   val analyse_if_branches :
-    expr * expr * expr -> t state -> context -> bool * bool
+    expr * expr * expr -> t cache -> context -> bool * bool
 
   (* This function is a hack to obtain results of control flow analysis to be used as input to data flow analyses *)
   val to_funcset : t -> FuncSet.t

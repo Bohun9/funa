@@ -24,28 +24,39 @@ module CallAnalysisMonotoneInstance : MonotoneInstance = struct
   let join = FuncSet.union
   let less_or_equal = FuncSet.subset
 
-  let constraints (cfg : cfg) (e : expr) (st : t state) (ci : cxt_info) :
-      t changes =
-    let cache_cfg = cache cfg in
-    let cache = cache st in
+  let constraints (cache_cfg : cache_cfg) (e : expr)
+      ((cache, env) : t cache * t env) (ci : cxt_info) : t changes =
     match e.data with
     | EApp (e1, e2) ->
-        (Lab (e.label, ci.cxt), cache e1.label ci.cxt)
-        :: (Lab (e.label, ci.cxt), cache e2.label ci.cxt)
+        ( Lab (e.label, ci.cxt),
+          cache e1.label ci.cxt,
+          [ Lab (e1.label, ci.cxt) ] )
+        :: ( Lab (e.label, ci.cxt),
+             cache e2.label ci.cxt,
+             [ Lab (e2.label, ci.cxt) ] )
         :: FuncSet.fold
              (fun (Func (l0, x, e0, cxt0)) acc ->
                ( Lab (e.label, ci.cxt),
-                 FuncSet.singleton (Func (l0, x, e0, cxt0)) )
+                 FuncSet.singleton (Func (l0, x, e0, cxt0)),
+                 [] )
                :: acc)
              (cache_cfg e1.label ci.cxt)
              []
     | EBinop (_, e1, e2) ->
         [
-          (Lab (e.label, ci.cxt), cache e1.label ci.cxt);
-          (Lab (e.label, ci.cxt), cache e2.label ci.cxt);
+          ( Lab (e.label, ci.cxt),
+            cache e1.label ci.cxt,
+            [ Lab (e1.label, ci.cxt) ] );
+          ( Lab (e.label, ci.cxt),
+            cache e2.label ci.cxt,
+            [ Lab (e2.label, ci.cxt) ] );
         ]
     | EUnop (_, e1) | EIf (e1, _, _) ->
-        [ (Lab (e.label, ci.cxt), cache e1.label ci.cxt) ]
+        [
+          ( Lab (e.label, ci.cxt),
+            cache e1.label ci.cxt,
+            [ Lab (e1.label, ci.cxt) ] );
+        ]
     | _ -> []
 
   let analyse_if_branches _ _ _ = (true, true)
@@ -105,14 +116,14 @@ module IntegerConstantPropagationMonotoneInstance = struct
     | _, _ -> false)
     && BoolSet.subset b1 b2
 
-  let constraints (_ : cfg) (e : expr) (st : t state) (ci : cxt_info) :
-      t changes =
+  let constraints (_ : cache_cfg) (e : expr) ((cache, env) : t cache * t env)
+      (ci : cxt_info) : t changes =
     match e.data with
-    | EInt i -> [ (Lab (e.label, ci.cxt), (ZInt i, bbot)) ]
+    | EInt i -> [ (Lab (e.label, ci.cxt), (ZInt i, bbot), []) ]
     | EUnop (_, _) -> []
     | EBinop (op, e1, e2) ->
-        let z1, _ = cache st e1.label ci.cxt in
-        let z2, _ = cache st e2.label ci.cxt in
+        let z1, _ = cache e1.label ci.cxt in
+        let z2, _ = cache e2.label ci.cxt in
         let z =
           match (z1, z2) with
           | ZBot, _ | _, ZBot -> ZBot
@@ -123,10 +134,14 @@ module IntegerConstantPropagationMonotoneInstance = struct
               | BINOP_Mul -> ZInt (n1 * n2))
           | _, _ -> ZTop
         in
-        [ (Lab (e.label, ci.cxt), (z, bbot)) ]
+        [
+          ( Lab (e.label, ci.cxt),
+            (z, bbot),
+            [ Lab (e1.label, ci.cxt); Lab (e2.label, ci.cxt) ] );
+        ]
     | ERelop (op, e1, e2) ->
-        let z1, _ = cache st e1.label ci.cxt in
-        let z2, _ = cache st e2.label ci.cxt in
+        let z1, _ = cache e1.label ci.cxt in
+        let z2, _ = cache e2.label ci.cxt in
         let b =
           match (z1, z2) with
           | ZBot, _ | _, ZBot -> bbot
@@ -136,12 +151,24 @@ module IntegerConstantPropagationMonotoneInstance = struct
               | RELOP_Lt -> BoolSet.singleton (n1 < n2))
           | _, _ -> btop
         in
-        [ (Lab (e.label, ci.cxt), (zbot, b)) ]
+        [
+          ( Lab (e.label, ci.cxt),
+            (zbot, b),
+            [ Lab (e1.label, ci.cxt); Lab (e2.label, ci.cxt) ] );
+        ]
     (* Custom handle of the if *)
     | EIf (e1, e2, e3) -> (
-        let _, b1 = cache st e1.label ci.cxt in
-        let c2 = (Lab (e.label, ci.cxt), cache st e2.label ci.cxt) in
-        let c3 = (Lab (e.label, ci.cxt), cache st e3.label ci.cxt) in
+        let _, b1 = cache e1.label ci.cxt in
+        let c2 =
+          ( Lab (e.label, ci.cxt),
+            cache e2.label ci.cxt,
+            [ Lab (e1.label, ci.cxt); Lab (e2.label, ci.cxt) ] )
+        in
+        let c3 =
+          ( Lab (e.label, ci.cxt),
+            cache e3.label ci.cxt,
+            [ Lab (e1.label, ci.cxt); Lab (e3.label, ci.cxt) ] )
+        in
         match (BoolSet.mem true b1, BoolSet.mem false b1) with
         | true, true -> [ c2; c3 ]
         | true, false -> [ c2 ]
@@ -149,9 +176,9 @@ module IntegerConstantPropagationMonotoneInstance = struct
         | false, false -> [])
     | _ -> []
 
-  let analyse_if_branches ((e1, e2, e3) : expr * expr * expr) (st : t state)
+  let analyse_if_branches ((e1, e2, e3) : expr * expr * expr) (cache : t cache)
       (cxt : context) : bool * bool =
-    let _, b1 = cache st e1.label cxt in
+    let _, b1 = cache e1.label cxt in
     (BoolSet.mem true b1, BoolSet.mem false b1)
 
   let gen_flow_constraints = FCAllWithoutIf

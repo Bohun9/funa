@@ -12,11 +12,18 @@ let rec _gen_contexts (prefix : context) (labs : label list) (k : int) :
 
 let gen_contexts (labs : label list) (k : int) = _gen_contexts [] labs k
 
-let cache (st : 'a state) (l : label) (cxt : context) : 'a =
-  Hashtbl.find st (Lab (l, cxt))
+let find_dft (dft : 'b) (hm : ('a, 'b) Hashtbl.t) (x : 'a) : 'b =
+  match Hashtbl.find_opt hm x with
+  | Some y -> y
+  | None ->
+      Hashtbl.replace hm x dft;
+      Hashtbl.find hm x
 
-let env (st : 'a state) (x : var) (cxt : context) : 'a =
-  Hashtbl.find st (Var (x, cxt))
+let cache (dft : 'a) (st : 'a state) (l : label) (cxt : context) : 'a =
+  find_dft dft st (Lab (l, cxt))
+
+let env (dft : 'a) (st : 'a state) (x : var) (cxt : context) : 'a =
+  find_dft dft st (Var (x, cxt))
 
 let free_vars_of_fun (Func (_, x, e0, _) : func) : VarSet.t =
   VarSet.remove x (free_vars_of_expr e0)

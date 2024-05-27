@@ -31,3 +31,22 @@ let rec attach_labels (t : term) : expr =
     | TRelop (op, t1, t2) -> ERelop (op, attach_labels t1, attach_labels t2)
   in
   { data = e; label = gen_label () }
+
+let label_expr_mapping (e : expr) : (label, expr) Hashtbl.t =
+  let r = Hashtbl.create 31 in
+  let rec go (e : expr) : unit =
+    Hashtbl.replace r e.label e;
+    match e.data with
+    | EInt _ | EBool _ | EVar _ -> ()
+    | EIf (e1, e2, e3) ->
+        go e1;
+        go e2;
+        go e3
+    | ELet (_, e1, e2) | EApp (e1, e2) | EBinop (_, e1, e2) | ERelop (_, e1, e2)
+      ->
+        go e1;
+        go e2
+    | ELam (_, e1) | ERec (_, _, e1) | EUnop (_, e1) -> go e1
+  in
+  go e;
+  r

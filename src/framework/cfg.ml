@@ -11,30 +11,36 @@ module ControlFlowMonotoneInstance : MonotoneInstance = struct
   let join = FuncSet.union
   let less_or_equal = FuncSet.subset
 
-  let constraints (_ : cfg) (e : expr) (st : t state) (ci : cxt_info) :
-      t changes =
-    let cache = cache st in
-    let env = env st in
+  let constraints _ (e : expr) ((cache, env) : t cache * t env) (ci : cxt_info)
+      : t changes =
     match e.data with
     | ELam (x, b) ->
         [
           ( Lab (e.label, ci.cxt),
-            FuncSet.singleton (Func (e.label, x, b, ci.cxt)) );
+            FuncSet.singleton (Func (e.label, x, b, ci.cxt)),
+            [] );
         ]
     | ERec (s, x, b) ->
         [
           ( Lab (e.label, ci.cxt),
-            FuncSet.singleton (Func (e.label, x, b, ci.cxt)) );
-          (Var (s, ci.cxt), FuncSet.singleton (Func (e.label, x, b, ci.cxt)));
+            FuncSet.singleton (Func (e.label, x, b, ci.cxt)),
+            [] );
+          (Var (s, ci.cxt), FuncSet.singleton (Func (e.label, x, b, ci.cxt)), []);
         ]
     | EApp (e1, e2) ->
         FuncSet.fold
-          (fun (Func (l0, x, e0, cxt0) as f) acc ->
-            (Var (x, ci.push e.label), cache e2.label ci.cxt)
-            :: (Lab (e.label, ci.cxt), cache e0.label (ci.push e.label))
+          (fun (Func (_, x, e0, cxt0) as f) acc ->
+            ( Var (x, ci.push e.label),
+              cache e2.label ci.cxt,
+              [ Lab (e2.label, ci.cxt) ] )
+            :: ( Lab (e.label, ci.cxt),
+                 cache e0.label (ci.push e.label),
+                 [ Lab (e0.label, ci.push e.label) ] )
             :: acc
             @ VarSet.fold
-                (fun y acc -> (Var (y, ci.push e.label), env y cxt0) :: acc)
+                (fun y acc ->
+                  (Var (y, ci.push e.label), env y cxt0, [ Var (y, cxt0) ])
+                  :: acc)
                 (free_vars_of_fun f) [])
           (cache e1.label ci.cxt) []
     | _ -> []
