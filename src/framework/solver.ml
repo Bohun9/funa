@@ -55,99 +55,85 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
     let cache = cache result
     let env = env result
 
-    let explicit_changes (e : expr) : MI.t changes =
-      List.fold_left
-        (fun acc cxt ->
-          acc @ MI.constraints cfg e result { cxt; push = cxt_push cxt })
-        [] contexts
+    let explicit_changes (e : expr) (cxt : context) : MI.t changes =
+      MI.constraints cfg e result { cxt; push = cxt_push cxt }
 
-    let implicit_var_changes (e : expr) : MI.t changes =
-      List.fold_left
-        (fun acc cxt ->
-          acc
-          @
-          match e.data with
-          | EInt _ | EBool _ -> []
-          | EVar x -> [ (Lab (e.label, cxt), env x cxt) ]
-          | EIf (_, _, _) -> []
-          | ELet (x, e1, _) -> [ (Var (x, cxt), cache e1.label cxt) ]
-          | EApp (e1, e2) ->
-              FuncSet.fold
-                (fun (Func (_, x, _, _)) acc ->
-                  (Var (x, cxt_push cxt e.label), cache e2.label cxt) :: acc)
-                (cache_cfg e1.label cxt) []
-          | ELam (_, _) -> []
-          | ERec (_, _, _) -> []
-          | EUnop (_, _) -> []
-          | EBinop (_, _, _) | ERelop (_, _, _) -> [])
-        [] contexts
+    let implicit_var_changes (e : expr) (cxt : context) : MI.t changes =
+      match e.data with
+      | EInt _ | EBool _ -> []
+      | EVar x -> [ (Lab (e.label, cxt), env x cxt) ]
+      | EIf (_, _, _) -> []
+      | ELet (x, e1, _) -> [ (Var (x, cxt), cache e1.label cxt) ]
+      | EApp (e1, e2) ->
+          FuncSet.fold
+            (fun (Func (_, x, _, _)) acc ->
+              (Var (x, cxt_push cxt e.label), cache e2.label cxt) :: acc)
+            (cache_cfg e1.label cxt) []
+      | ELam (_, _) -> []
+      | ERec (_, _, _) -> []
+      | EUnop (_, _) -> []
+      | EBinop (_, _, _) | ERelop (_, _, _) -> []
 
-    let implicit_flow_changes (e : expr) (fcs : flow_constr_specifier) :
-        MI.t changes =
-      List.fold_left
-        (fun acc cxt ->
-          acc
-          @
-          match e.data with
-          | EInt _ | EBool _ | EVar _ | ELam (_, _) | ERec (_, _, _) -> []
-          | EIf (_, e2, e3) -> (
-              match fcs with
-              | FCAll ->
-                  [
-                    (Lab (e.label, cxt), cache e2.label cxt);
-                    (Lab (e.label, cxt), cache e3.label cxt);
-                  ]
-              | _ -> [])
-          | ELet (_, _, e2) -> [ (Lab (e.label, cxt), cache e2.label cxt) ]
-          | EApp (e1, _) ->
-              FuncSet.fold
-                (fun (Func (_, _, e0, _)) acc ->
-                  (Lab (e.label, cxt), cache e0.label (cxt_push cxt e.label))
-                  :: acc)
-                (cache_cfg e1.label cxt) []
-          | EUnop (_, _) | EBinop (_, _, _) | ERelop (_, _, _) -> [])
-        [] contexts
+    let implicit_flow_changes (e : expr) (fcs : flow_constr_specifier)
+        (cxt : context) : MI.t changes =
+      match e.data with
+      | EInt _ | EBool _ | EVar _ | ELam (_, _) | ERec (_, _, _) -> []
+      | EIf (_, e2, e3) -> (
+          match fcs with
+          | FCAll ->
+              [
+                (Lab (e.label, cxt), cache e2.label cxt);
+                (Lab (e.label, cxt), cache e3.label cxt);
+              ]
+          | _ -> [])
+      | ELet (_, _, e2) -> [ (Lab (e.label, cxt), cache e2.label cxt) ]
+      | EApp (e1, _) ->
+          FuncSet.fold
+            (fun (Func (_, _, e0, _)) acc ->
+              (Lab (e.label, cxt), cache e0.label (cxt_push cxt e.label)) :: acc)
+            (cache_cfg e1.label cxt) []
+      | EUnop (_, _) | EBinop (_, _, _) | ERelop (_, _, _) -> []
 
-    let implicit_app_changes (e : expr) : MI.t changes =
+    let implicit_app_changes (e : expr) (cxt : context) : MI.t changes =
       match e.data with
       | EApp (e1, e2) ->
-          List.fold_left
-            (fun acc cxt ->
-              acc
-              @ FuncSet.fold
-                  (fun (Func (_, _, e0, cxt0) as f) acc ->
-                    VarSet.fold
-                      (fun y acc ->
-                        (Var (y, cxt_push cxt e.label), env y cxt0) :: acc)
-                      (free_vars_of_fun f) []
-                    @ acc)
-                  (cache_cfg e1.label cxt) [])
-            [] contexts
+          FuncSet.fold
+            (fun (Func (_, _, e0, cxt0) as f) acc ->
+              VarSet.fold
+                (fun y acc ->
+                  (Var (y, cxt_push cxt e.label), env y cxt0) :: acc)
+                (free_vars_of_fun f) []
+              @ acc)
+            (cache_cfg e1.label cxt) []
       | _ -> []
 
-    let rec collect_changes (e : expr) : MI.t changes =
-      let changes_explicit = explicit_changes e in
+    let rec collect_changes (e : expr) (cxt : context) : MI.t changes =
+      let changes_explicit = explicit_changes e cxt in
       let changes_implicit_var =
-        if MI.gen_var_constraints then implicit_var_changes e else []
+        if MI.gen_var_constraints then implicit_var_changes e cxt else []
       in
       let changes_implicit_flow =
         if match MI.gen_flow_constraints with FCNone -> false | _ -> true then
-          implicit_flow_changes e MI.gen_flow_constraints
+          implicit_flow_changes e MI.gen_flow_constraints cxt
         else []
       in
       let changes_implicit = changes_implicit_var @ changes_implicit_flow in
-      let changes_implicit_app = implicit_app_changes e in
+      let changes_implicit_app = implicit_app_changes e cxt in
       let changes_down =
         match e.data with
         | EInt _ | EBool _ | EVar _ -> []
         | EIf (e1, e2, e3) ->
-            collect_changes e1 @ collect_changes e2 @ collect_changes e3
+            let go2, go3 = MI.analyse_if_branches (e1, e2, e3) result cxt in
+            collect_changes e1 cxt
+            @ (if go2 then collect_changes e2 cxt else [])
+            @ if go3 then collect_changes e3 cxt else []
         | ELet (_, e1, e2)
         | EApp (e1, e2)
         | EBinop (_, e1, e2)
         | ERelop (_, e1, e2) ->
-            collect_changes e1 @ collect_changes e2
-        | ELam (_, e1) | ERec (_, _, e1) | EUnop (_, e1) -> collect_changes e1
+            collect_changes e1 cxt @ collect_changes e2 cxt
+        | ELam (_, e1) | ERec (_, _, e1) | EUnop (_, e1) ->
+            collect_changes e1 cxt
       in
       changes_explicit @ changes_implicit @ changes_down @ changes_implicit_app
 
@@ -160,7 +146,11 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
         false changes
 
     let step () : bool =
-      let changes = collect_changes program in
+      let changes =
+        List.fold_left
+          (fun ac cxt -> ac @ collect_changes program cxt)
+          [] contexts
+      in
       apply_changes changes
 
     let rec run () = if step () then run () else ()

@@ -28,7 +28,6 @@ module CallAnalysisMonotoneInstance : MonotoneInstance = struct
       t changes =
     let cache_cfg = cache cfg in
     let cache = cache st in
-    let env = env st in
     match e.data with
     | EApp (e1, e2) ->
         (Lab (e.label, ci.cxt), cache e1.label ci.cxt)
@@ -49,6 +48,7 @@ module CallAnalysisMonotoneInstance : MonotoneInstance = struct
         [ (Lab (e.label, ci.cxt), cache e1.label ci.cxt) ]
     | _ -> []
 
+  let analyse_if_branches _ _ _ = (true, true)
   let gen_flow_constraints = FCAll
   let gen_var_constraints = false
 end
@@ -148,6 +148,11 @@ module IntegerConstantPropagationMonotoneInstance = struct
         | false, true -> [ c3 ]
         | false, false -> [])
     | _ -> []
+
+  let analyse_if_branches ((e1, e2, e3) : expr * expr * expr) (st : t state)
+      (cxt : context) : bool * bool =
+    let _, b1 = cache st e1.label cxt in
+    (BoolSet.mem true b1, BoolSet.mem false b1)
 
   let gen_flow_constraints = FCAllWithoutIf
   let gen_var_constraints = true
