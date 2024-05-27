@@ -2,7 +2,7 @@ open Lang.Ast
 open Api
 open Utils
 
-module CFG : MonotoneInstance = struct
+module ControlFlowMonotoneInstance : MonotoneInstance = struct
   type t = FuncSet.t
 
   let to_string = funcset_to_string

@@ -17,7 +17,7 @@ let abort () =
   let _ = print_string usage_string in
   exit 1
 
-let nth_cmdline_arg n = try Sys.argv.(n) with Invalid_argument _ -> abort ()
+let nth_cli_arg n = try Sys.argv.(n) with Invalid_argument _ -> abort ()
 
 let read_file file =
   let ch =
@@ -30,81 +30,90 @@ let read_file file =
   close_in ch;
   s
 
-let file = nth_cmdline_arg 2
+let file = nth_cli_arg 2
 let source = read_file file
 let program = Lang.Label.parse_from_string source |> Lang.Label.attach_labels
 
-let k_cfa =
-  match nth_cmdline_arg 1 with
-  | "cfg" -> int_of_string (nth_cmdline_arg 3)
-  | "analyse" -> int_of_string (nth_cmdline_arg 4)
-  | _ -> 0
+module ControlFlowSolver (P : sig
+  val k_cfa : int
+end) =
+struct
+  open P
 
-module MonotoneInstanceToString (MI : Api.MonotoneInstance) = struct
-  let convert (result : MI.t Api.state) : string Api.state =
-    result |> Hashtbl.to_seq
-    |> Seq.map (fun (d, y) -> (d, MI.to_string y))
-    |> Hashtbl.of_seq
-end
-
-module CFGSolver = struct
-  module CFGSolver =
+  module ControlFlowSolver =
     Solver.Solver
-      (Cfg.CFG)
+      (Cfg.ControlFlowMonotoneInstance)
       (struct
-        let k = k_cfa
+        let k_cfa = k_cfa
         let cfg = None
       end)
 
-  module CfgToString = MonotoneInstanceToString (Cfg.CFG)
+  let cfg = ControlFlowSolver.analyse program
 
-  let cfg = CFGSolver.analyse program
-  let cfg_string = CfgToString.convert cfg
+  let cfg_string =
+    Solver.convert_results_to_string cfg
+      Cfg.ControlFlowMonotoneInstance.to_string
 
   let cfg_transparent =
     cfg |> Hashtbl.to_seq
-    |> Seq.map (fun (d, y) -> (d, Cfg.CFG.to_funcset y))
+    |> Seq.map (fun (d, y) -> (d, Cfg.ControlFlowMonotoneInstance.to_funcset y))
     |> Hashtbl.of_seq
 end
 
-module DataFlowAnalysisSolver (AnalysisInstance : Api.MonotoneInstance) = struct
-  module AnalysisSolver =
+module DataFlowSolver
+    (P : sig
+      val k_cfa : int
+    end)
+    (AnalysisInstance : Api.MonotoneInstance) =
+struct
+  open P
+
+  module ControlFlowSolved = ControlFlowSolver (struct
+    let k_cfa = k_cfa
+  end)
+
+  module DataFlowSolver =
     Solver.Solver
       (AnalysisInstance)
       (struct
-        let k = k_cfa
-        let cfg = Some CFGSolver.cfg_transparent
+        let k_cfa = k_cfa
+        let cfg = Some ControlFlowSolved.cfg_transparent
       end)
 
-  module AnalysisConv = MonotoneInstanceToString (AnalysisInstance)
+  let analysis = DataFlowSolver.analyse program
 
-  let analysis = AnalysisSolver.analyse program
-  let analysis_string = AnalysisConv.convert analysis
+  let analysis_string =
+    Solver.convert_results_to_string analysis AnalysisInstance.to_string
 end
 
-let _ =
-  match nth_cmdline_arg 1 with
-  | "print" ->
-      let module DotRawProgram = Printer.Dot.MakeDotProgram (struct
-        let e = program
-        let results = None
-      end) in
-      print_endline DotRawProgram.dot_program
+let results =
+  match nth_cli_arg 1 with
+  | "print" -> None
   | "cfg" ->
-      let module DotCfg = Printer.Dot.MakeDotProgram (struct
-        let e = program
-        let results = Some CFGSolver.cfg_string
+      let k_cfa = int_of_string (nth_cli_arg 3) in
+      let module ControlFlowResults = ControlFlowSolver (struct
+        let k_cfa = k_cfa
       end) in
-      print_endline DotCfg.dot_program
+      Some ControlFlowResults.cfg_string
   | "analyse" ->
+      let k_cfa = int_of_string (nth_cli_arg 4) in
       let module AnalysisInstance =
-        (val Hashtbl.find Analyses.registery (nth_cmdline_arg 3)
+        (val Hashtbl.find Analyses.registery (nth_cli_arg 3)
             : Api.MonotoneInstance)
       in
-      let module AnalysisResults = DataFlowAnalysisSolver (AnalysisInstance) in
-      let module DotDataFlow = Printer.Dot.MakeDotProgram (struct
-        let e = program
-        let results = Some AnalysisResults.analysis_string
-      end) in
-      print_endline DotDataFlow.dot_program
+      let module AnalysisResults =
+        DataFlowSolver
+          (struct
+            let k_cfa = k_cfa
+          end)
+          (AnalysisInstance)
+      in
+      Some AnalysisResults.analysis_string
   | _ -> abort ()
+
+module DotGraph = Printer.Dot.MakeDotProgram (struct
+  let program = program
+  let results = results
+end)
+
+let _ = print_endline DotGraph.dot_program

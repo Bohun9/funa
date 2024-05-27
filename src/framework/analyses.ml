@@ -40,6 +40,13 @@ module CallAnalysisMonotoneInstance : MonotoneInstance = struct
                :: acc)
              (cache_cfg e1.label ci.cxt)
              []
+    | EBinop (_, e1, e2) ->
+        [
+          (Lab (e.label, ci.cxt), cache e1.label ci.cxt);
+          (Lab (e.label, ci.cxt), cache e2.label ci.cxt);
+        ]
+    | EUnop (_, e1) | EIf (e1, _, _) ->
+        [ (Lab (e.label, ci.cxt), cache e1.label ci.cxt) ]
     | _ -> []
 
   let gen_flow_constraints = true

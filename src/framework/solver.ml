@@ -2,8 +2,14 @@ open Lang.Ast
 open Api
 open Utils
 
+let convert_results_to_string (result : 'a Api.state) (to_string : 'a -> string)
+    : string Api.state =
+  result |> Hashtbl.to_seq
+  |> Seq.map (fun (d, y) -> (d, to_string y))
+  |> Hashtbl.of_seq
+
 module type SolverParams = sig
-  val k : int
+  val k_cfa : int
   val cfg : cfg option
 end
 
@@ -17,7 +23,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
     let vars = vars_of_expr program
     let labels = labels program
     let app_labels = app_labels program
-    let contexts = gen_contexts app_labels Params.k
+    let contexts = gen_contexts app_labels Params.k_cfa
 
     let fill_state (s : 'a state) (bot : 'a) =
       List.iter
@@ -38,7 +44,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
 
     let cxt_push cxt l =
       let cxt = cxt @ [ l ] in
-      if List.length cxt <= Params.k then cxt else List.tl cxt
+      if List.length cxt <= Params.k_cfa then cxt else List.tl cxt
 
     let result : MI.t state =
       let r = Hashtbl.create 127 in

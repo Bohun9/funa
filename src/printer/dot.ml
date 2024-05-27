@@ -2,7 +2,7 @@ open Lang.Ast
 open Framework.Api
 
 module MakeDotProgram (E : sig
-  val e : expr
+  val program : expr
   val results : (domain, string) Hashtbl.t option
 end) =
 struct
@@ -103,8 +103,8 @@ struct
     | ELam (_, e1) | ERec (_, _, e1) | EUnop (_, e1) ->
         edge_stmt e.label e1.label :: build_edge_list e1
 
-  let node_block = String.concat "" (build_node_list e)
-  let edge_block = String.concat "" (build_edge_list e)
+  let node_block = String.concat "" (build_node_list program)
+  let edge_block = String.concat "" (build_edge_list program)
 
   let dot_program =
     Printf.sprintf {|
