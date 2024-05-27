@@ -78,7 +78,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
 
     (* There is a need for dummy constraints that imply the analysis of subexpressions. *)
     (* In the control flow we need this, because we want to have information about all reachable forms. *)
-    (* But in the constant propagation it may usefull be to not visit some of the if branches. *)
+    (* But in the constant propagation it may be useful to not visit some of the if branches. *)
     let implicit_flow_changes (e : expr) (fcs : flow_constr_specifier)
         (cxt : context) : MI.t changes =
       match e.data with
