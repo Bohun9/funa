@@ -1,6 +1,5 @@
 open Api
 open Lang.Ast
-open Utils
 
 let registery = Hashtbl.create 7
 
@@ -25,7 +24,7 @@ module CallAnalysisMonotoneInstance : MonotoneInstance = struct
   let less_or_equal = FuncSet.subset
 
   let constraints (cache_cfg : cache_cfg) (e : expr)
-      ((cache, env) : t cache * t env) (ci : cxt_info) : t changes =
+      ((cache, _) : t cache * t env) (ci : cxt_info) : t changes =
     match e.data with
     | EApp (e1, e2) ->
         ( Lab (e.label, ci.cxt),
@@ -116,11 +115,18 @@ module IntegerConstantPropagationMonotoneInstance = struct
     | _, _ -> false)
     && BoolSet.subset b1 b2
 
-  let constraints (_ : cache_cfg) (e : expr) ((cache, env) : t cache * t env)
+  let constraints (_ : cache_cfg) (e : expr) ((cache, _) : t cache * t env)
       (ci : cxt_info) : t changes =
     match e.data with
     | EInt i -> [ (Lab (e.label, ci.cxt), (ZInt i, bbot), []) ]
-    | EUnop (_, _) -> []
+    | EUnop (op, e1) -> (
+        match op with
+        | UNOP_Not ->
+            let _, b1 = cache e1.label ci.cxt in
+            let b1 =
+              b1 |> BoolSet.to_seq |> Seq.map (fun b -> not b) |> BoolSet.of_seq
+            in
+            [ (Lab (e.label, ci.cxt), (zbot, b1), [ Lab (e1.label, ci.cxt) ]) ])
     | EBinop (op, e1, e2) ->
         let z1, _ = cache e1.label ci.cxt in
         let z2, _ = cache e2.label ci.cxt in
@@ -148,7 +154,9 @@ module IntegerConstantPropagationMonotoneInstance = struct
           | ZInt n1, ZInt n2 -> (
               match op with
               | RELOP_Gt -> BoolSet.singleton (n1 > n2)
-              | RELOP_Lt -> BoolSet.singleton (n1 < n2))
+              | RELOP_Lt -> BoolSet.singleton (n1 < n2)
+              | RELOP_Ge -> BoolSet.singleton (n1 >= n2)
+              | RELOP_Le -> BoolSet.singleton (n1 <= n2))
           | _, _ -> btop
         in
         [
@@ -176,7 +184,7 @@ module IntegerConstantPropagationMonotoneInstance = struct
         | false, false -> [])
     | _ -> []
 
-  let analyse_if_branches ((e1, e2, e3) : expr * expr * expr) (cache : t cache)
+  let analyse_if_branches ((e1, _, _) : expr * expr * expr) (cache : t cache)
       (cxt : context) : bool * bool =
     let _, b1 = cache e1.label cxt in
     (BoolSet.mem true b1, BoolSet.mem false b1)

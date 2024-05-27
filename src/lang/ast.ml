@@ -8,18 +8,22 @@ module VarSet = Set.Make (String)
 let var_to_string x = x
 let label_to_string = string_of_int
 
-type unop = |
+type unop = UNOP_Not
 
-let unop_to_string (op : unop) : string = match op with _ -> .
+let unop_to_string (op : unop) : string = match op with UNOP_Not -> "!"
 
 type binop = BINOP_Add | BINOP_Mul | BINOP_Sub
-type relop = RELOP_Gt | RELOP_Lt
+type relop = RELOP_Gt | RELOP_Lt | RELOP_Ge | RELOP_Le
 
 let binop_to_string (op : binop) : string =
   match op with BINOP_Add -> "+" | BINOP_Mul -> "*" | BINOP_Sub -> "-"
 
 let relop_to_string (op : relop) : string =
-  match op with RELOP_Gt -> "&gt;" | RELOP_Lt -> "&lt;"
+  match op with
+  | RELOP_Gt -> "&gt;"
+  | RELOP_Lt -> "&lt;"
+  | RELOP_Ge -> "&ge;"
+  | RELOP_Le -> "&le;"
 
 type term =
   | TInt of int

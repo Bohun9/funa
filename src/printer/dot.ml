@@ -28,6 +28,11 @@ struct
             | Var (_, _) -> ())
           results
 
+  let label_results =
+    label_results |> Hashtbl.to_seq
+    |> Seq.map (fun (x, ys) -> (x, List.sort compare ys))
+    |> Hashtbl.of_seq
+
   let results_rows (l : label) : string =
     match results with
     | None -> ""

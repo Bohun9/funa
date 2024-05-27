@@ -18,9 +18,12 @@ let symbols_map = [
   "+", OP_ADD;
   "*", OP_MUL;
   "-", OP_MINUS;
-  ">", OP_GREATER;
-  "<", OP_LESS;
+  ">", OP_GT;
+  "<", OP_LT;
+  ">=", OP_GE;
+  "<=", OP_LE;
   "=>", OP_ARROW;
+  "!", OP_NOT;
 ] |> List.to_seq |> Hashtbl.of_seq
 
 let make_id s = 
@@ -35,8 +38,8 @@ let make_symbol s =
 
 let digits = ['0'-'9']
 let int = digits+
-let identifier = ['a'-'z'] ['a'-'z' '0'-'9']*
-let symbols = ['(' ')' '=' '+' '*' '-' '>' '<'] | "=>"
+let identifier = ['a'-'z' '_'] ['a'-'z' '_' '0'-'9']*
+let symbols = ['(' ')' '=' '+' '*' '-' '>' '<' '!'] | "=>" | "<=" | ">="
 
 rule token = parse
   | [' ' '\t' '\n'] { token lexbuf }

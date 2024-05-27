@@ -14,7 +14,7 @@ dune build
 dune exec -- src/bin/funa.exe cfg examples/id.fun 1 | xdot -
 ```
 ```
-dune exec -- src/bin/funa.exe analyse examples/id.fun call_analysis 1 | xdot -
+dune exec -- src/bin/funa.exe analyse examples/factorial.fun constant_propagation 4 | xdot -
 ```
 
 ### Remarks

@@ -90,6 +90,9 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
       | EUnop (_, _) -> []
       | EBinop (_, _, _) | ERelop (_, _, _) -> []
 
+    (* There is a need for dummy constraints that imply the analysis of subexpressions. *)
+    (* In the control flow we need this, because we want to have information about all reachable forms. *)
+    (* But in the constant propagation it may usefull be to not visit some of the if branches. *)
     let implicit_flow_changes (e : expr) (fcs : flow_constr_specifier)
         (cxt : context) : MI.t changes =
       match e.data with
@@ -114,8 +117,6 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
               :: acc)
             (cache_cfg e1.label cxt)
             [ (Lab (e.label, cxt), bot, [ Lab (e1.label, cxt) ]) ]
-          (* Dummy constraint to analyse left operand ^^^^^ *)
-          (* If constraints are adjusted to "worklist style" there will be no need for it *)
       | EUnop (_, e1) -> [ (Lab (e.label, cxt), bot, [ Lab (e1.label, cxt) ]) ]
       | EBinop (_, e1, e2) | ERelop (_, e1, e2) ->
           [
@@ -137,7 +138,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
             (cache_cfg e1.label cxt) []
       | _ -> []
 
-    let rec collect_changes (e : expr) (cxt : context) : MI.t changes =
+    let collect_changes (e : expr) (cxt : context) : MI.t changes =
       if FormSet.mem (e, cxt) !visited then []
       else (
         visited := FormSet.add (e, cxt) !visited;
@@ -155,19 +156,6 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
         changes_explicit @ changes_implicit @ changes_implicit_app)
 
     let apply_changes (changes : MI.t changes) : bool =
-      (* let _ = print_endline "CHANGES:" in *)
-      (* List.iter *)
-      (*   (fun (d, y, deps) -> *)
-      (*     let deps_str = *)
-      (*       List.map domain_to_string deps *)
-      (*       |> String.concat "," |> Printf.sprintf "[%s]" *)
-      (*     in *)
-      (*     let s = *)
-      (*       Printf.sprintf "%s %s %s" (domain_to_string d) (MI.to_string y) *)
-      (*         deps_str *)
-      (*     in *)
-      (*     print_endline s) *)
-      (* changes; *)
       List.fold_left
         (fun ch (x, y, _) ->
           let old = find_dft bot result x in
@@ -184,7 +172,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
         todo := FormSet.remove form !todo;
         let new_changes = collect_changes e cxt in
         List.iter
-          (fun (d, y, deps) ->
+          (fun (d, _, deps) ->
             List.iter
               (fun d ->
                 match d with
@@ -196,17 +184,12 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
           new_changes;
         changes := new_changes @ !changes
       done;
-      (* let _ = print_endline "VISITED:" in *)
-      (* FormSet.iter *)
-      (*   (fun (e, _) -> print_endline (label_to_string e.label)) *)
-      (*   !visited; *)
       apply_changes !changes
 
     let rec run () = if step () then run () else ()
   end
 
   let analyse (program : expr) : MI.t state =
-    (* let _ = print_endline "NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW" in *)
     let module Instance = Worker (struct
       let program = program
     end) in
