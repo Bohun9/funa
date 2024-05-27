@@ -15,13 +15,13 @@ struct
 end
 
 module CallAnalysisMonotoneInstance : MonotoneInstance = struct
-  type t = FuncSet.t
+  type t = LabelSet.t
 
-  let to_string = funcset_to_string
-  let to_funcset x = x
-  let bot _ = FuncSet.empty
-  let join = FuncSet.union
-  let less_or_equal = FuncSet.subset
+  let to_string = labelset_to_string
+  let to_funcset _ = failwith "internal error"
+  let bot _ = LabelSet.empty
+  let join = LabelSet.union
+  let less_or_equal = LabelSet.subset
 
   let constraints (cache_cfg : cache_cfg) (e : expr)
       ((cache, _) : t cache * t env) (ci : cxt_info) : t changes =
@@ -34,11 +34,8 @@ module CallAnalysisMonotoneInstance : MonotoneInstance = struct
              cache e2.label ci.cxt,
              [ Lab (e2.label, ci.cxt) ] )
         :: FuncSet.fold
-             (fun (Func (l0, x, e0, cxt0)) acc ->
-               ( Lab (e.label, ci.cxt),
-                 FuncSet.singleton (Func (l0, x, e0, cxt0)),
-                 [] )
-               :: acc)
+             (fun (Func (l0, _, _, _)) acc ->
+               (Lab (e.label, ci.cxt), LabelSet.singleton l0, []) :: acc)
              (cache_cfg e1.label ci.cxt)
              []
     | EBinop (_, e1, e2) ->
@@ -58,7 +55,6 @@ module CallAnalysisMonotoneInstance : MonotoneInstance = struct
         ]
     | _ -> []
 
-  let analyse_if_branches _ _ _ = (true, true)
   let gen_flow_constraints = FCAll
   let gen_var_constraints = false
 end
@@ -69,7 +65,7 @@ module _ = RegisterAnalysis (struct
   module A = CallAnalysisMonotoneInstance
 end)
 
-module IntegerConstantPropagationMonotoneInstance = struct
+module ConstantPropagationMonotoneInstance = struct
   type tz =
     | ZBot (* definitely not an integer *)
     | ZInt of int (* exactly this integer *)
@@ -184,11 +180,6 @@ module IntegerConstantPropagationMonotoneInstance = struct
         | false, false -> [])
     | _ -> []
 
-  let analyse_if_branches ((e1, _, _) : expr * expr * expr) (cache : t cache)
-      (cxt : context) : bool * bool =
-    let _, b1 = cache e1.label cxt in
-    (BoolSet.mem true b1, BoolSet.mem false b1)
-
   let gen_flow_constraints = FCAllWithoutIf
   let gen_var_constraints = true
 end
@@ -196,5 +187,5 @@ end
 module _ = RegisterAnalysis (struct
   let name = "constant_propagation"
 
-  module A = IntegerConstantPropagationMonotoneInstance
+  module A = ConstantPropagationMonotoneInstance
 end)

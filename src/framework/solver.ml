@@ -58,7 +58,6 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
       match e.data with
       | EInt _ | EBool _ -> []
       | EVar x -> [ (Lab (e.label, cxt), env x cxt, [ Var (x, cxt) ]) ]
-      | EIf (_, _, _) -> []
       | ELet (x, e1, _) ->
           [ (Var (x, cxt), cache e1.label cxt, [ Lab (e1.label, cxt) ]) ]
       | EApp (e1, e2) ->
@@ -69,10 +68,13 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
                 [ Lab (e2.label, cxt) ] )
               :: acc)
             (cache_cfg e1.label cxt) []
-      | ELam (_, _) -> []
-      | ERec (_, _, _) -> []
-      | EUnop (_, _) -> []
-      | EBinop (_, _, _) | ERelop (_, _, _) -> []
+      | EIf (_, _, _)
+      | ELam (_, _)
+      | ERec (_, _, _)
+      | EUnop (_, _)
+      | EBinop (_, _, _)
+      | ERelop (_, _, _) ->
+          []
 
     (* There is a need for dummy constraints that imply the analysis of subexpressions. *)
     (* In the control flow we need this, because we want to have information about all reachable forms. *)
@@ -135,9 +137,9 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
           then implicit_flow_changes e MI.gen_flow_constraints cxt
           else []
         in
-        let changes_implicit = changes_implicit_var @ changes_implicit_flow in
         let changes_implicit_app = implicit_app_changes e cxt in
-        changes_explicit @ changes_implicit @ changes_implicit_app)
+        changes_explicit @ changes_implicit_var @ changes_implicit_flow
+        @ changes_implicit_app)
 
     let apply_changes (changes : MI.t changes) : bool =
       List.fold_left
@@ -147,6 +149,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
           ch || not (MI.less_or_equal y old))
         false changes
 
+    (* Round Robin approach *)
     let step () : bool =
       let changes = ref [] in
       todo := FormSet.singleton (program, []);

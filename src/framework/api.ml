@@ -94,10 +94,6 @@ module type MonotoneInstance = sig
   *)
   val gen_var_constraints : bool
 
-  (* Whether to analyse branches of the if in the specific context *)
-  val analyse_if_branches :
-    expr * expr * expr -> t cache -> context -> bool * bool
-
   (* This function is a hack to obtain results of control flow analysis to be used as input to data flow analyses *)
   val to_funcset : t -> FuncSet.t
 end

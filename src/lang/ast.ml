@@ -3,10 +3,15 @@
 type var = string
 type label = int
 
+module LabelSet = Set.Make (Int)
 module VarSet = Set.Make (String)
 
 let var_to_string x = x
 let label_to_string = string_of_int
+
+let labelset_to_string s =
+  s |> LabelSet.to_seq |> Seq.map label_to_string |> List.of_seq
+  |> String.concat "," |> Printf.sprintf "{%s}"
 
 type unop = UNOP_Not
 
