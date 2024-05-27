@@ -26,20 +26,8 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
     let contexts = gen_contexts app_labels Params.k_cfa
     let lab_expr_mapping = Lang.Label.label_expr_mapping program
 
-    let fill_state (s : 'a state) (bot : 'a) =
-      List.iter
-        (fun cxt ->
-          List.iter (fun x -> Hashtbl.add s (Var (x, cxt)) bot) vars;
-          List.iter (fun l -> Hashtbl.add s (Lab (l, cxt)) bot) labels)
-        contexts
-
     let cfg =
-      match Params.cfg with
-      | Some cfg -> cfg
-      | None ->
-          let dummy_cfg = Hashtbl.create 127 in
-          let _ = fill_state dummy_cfg FuncSet.empty in
-          dummy_cfg
+      match Params.cfg with Some cfg -> cfg | None -> Hashtbl.create 127
 
     let bot = MI.bot program
 
@@ -47,11 +35,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
       let cxt = cxt @ [ l ] in
       if List.length cxt <= Params.k_cfa then cxt else List.tl cxt
 
-    let result : MI.t state =
-      let r = Hashtbl.create 127 in
-      (* fill_state r (MI.bot program); *)
-      r
-
+    let result : MI.t state = Hashtbl.create 127
     let cache_cfg = cache FuncSet.empty cfg
     let cache = cache (MI.bot program) result
     let env = env (MI.bot program) result
