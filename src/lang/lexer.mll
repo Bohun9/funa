@@ -32,7 +32,7 @@ let make_symbol s =
 
 let digits = ['0'-'9']
 let int = digits+
-let identifier = ['a'-'z']+
+let identifier = ['a'-'z'] ['a'-'z' '0'-'9']*
 let symbols = ['(' ')' '=' '+' '*'] | "=>"
 
 rule token = parse

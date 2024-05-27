@@ -34,7 +34,7 @@ module ControlFlowMonotoneInstance : MonotoneInstance = struct
             :: (Lab (e.label, ci.cxt), cache e0.label (ci.push e.label))
             :: acc
             @ VarSet.fold
-                (fun y acc -> (Var (y, cxt0), env y (ci.push e.label)) :: acc)
+                (fun y acc -> (Var (y, ci.push e.label), env y cxt0) :: acc)
                 (free_vars_of_fun f) [])
           (cache e1.label ci.cxt) []
     | _ -> []

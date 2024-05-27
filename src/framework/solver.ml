@@ -98,8 +98,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
           | EApp (e1, _) ->
               FuncSet.fold
                 (fun (Func (_, _, e0, _)) acc ->
-                  ( Lab (e.label, cxt_push cxt e.label),
-                    cache e0.label (cxt_push cxt e.label) )
+                  (Lab (e.label, cxt), cache e0.label (cxt_push cxt e.label))
                   :: acc)
                 (cache_cfg e1.label cxt) []
           | EUnop (_, _) | EBinop (_, _, _) -> [])
@@ -112,10 +111,10 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
             (fun acc cxt ->
               acc
               @ FuncSet.fold
-                  (fun (Func (_, _, e0, ctx0) as f) acc ->
+                  (fun (Func (_, _, e0, cxt0) as f) acc ->
                     VarSet.fold
                       (fun y acc ->
-                        (Var (y, ctx0), env y (cxt_push cxt e.label)) :: acc)
+                        (Var (y, cxt_push cxt e.label), env y cxt0) :: acc)
                       (free_vars_of_fun f) []
                     @ acc)
                   (cache_cfg e1.label cxt) [])

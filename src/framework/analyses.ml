@@ -58,3 +58,61 @@ module _ = RegisterAnalysis (struct
 
   module A = CallAnalysisMonotoneInstance
 end)
+
+module IntegerConstantPropagationMonotoneInstance = struct
+  type t =
+    | Bot (* definitely not an integer *)
+    | Int of int (* exactly this integer *)
+    | Top (* at least 2 different integers *)
+
+  let to_string (z : t) : string =
+    match z with Bot -> "⊥" | Int i -> string_of_int i | Top -> "⊤"
+
+  let to_funcset _ = failwith "internal error"
+  let bot _ = Bot
+
+  let join z1 z2 =
+    match (z1, z2) with
+    | Int n1, Int n2 when n1 = n2 -> Int n1
+    | Int _, Int _ | Top, _ | _, Top -> Top
+    | Bot, Int _ -> z2
+    | Int _, Bot -> z1
+    | Bot, Bot -> Bot
+
+  let less_or_equal z1 z2 =
+    match (z1, z2) with
+    | _, Top | Bot, _ -> true
+    | Int n1, Int n2 when n1 = n2 -> true
+    | _, _ -> false
+
+  let constraints (cfg : cfg) (e : expr) (st : t state) (ci : cxt_info) :
+      t changes =
+    match e.data with
+    | EInt i -> [ (Lab (e.label, ci.cxt), Int i) ]
+    | EUnop (_, _) -> []
+    | EBinop (op, e1, e2) ->
+        [
+          ( Lab (e.label, ci.cxt),
+            match op with
+            | BINOP_Add -> (
+                match (cache st e1.label ci.cxt, cache st e2.label ci.cxt) with
+                | Bot, _ | _, Bot -> Bot
+                | Int n1, Int n2 -> Int (n1 + n2)
+                | _, _ -> Top)
+            | BINOP_Mul -> (
+                match (cache st e1.label ci.cxt, cache st e2.label ci.cxt) with
+                | Bot, _ | _, Bot -> Bot
+                | Int n1, Int n2 -> Int (n1 * n2)
+                | _, _ -> Top) );
+        ]
+    | _ -> []
+
+  let gen_flow_constraints = true
+  let gen_var_constraints = true
+end
+
+module _ = RegisterAnalysis (struct
+  let name = "constant_propagation"
+
+  module A = IntegerConstantPropagationMonotoneInstance
+end)
