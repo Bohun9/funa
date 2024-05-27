@@ -12,10 +12,14 @@ type unop = |
 
 let unop_to_string (op : unop) : string = match op with _ -> .
 
-type binop = BINOP_Add | BINOP_Mul
+type binop = BINOP_Add | BINOP_Mul | BINOP_Sub
+type relop = RELOP_Gt | RELOP_Lt
 
 let binop_to_string (op : binop) : string =
-  match op with BINOP_Add -> "+" | BINOP_Mul -> "*"
+  match op with BINOP_Add -> "+" | BINOP_Mul -> "*" | BINOP_Sub -> "-"
+
+let relop_to_string (op : relop) : string =
+  match op with RELOP_Gt -> "&gt;" | RELOP_Lt -> "&lt;"
 
 type term =
   | TInt of int
@@ -28,6 +32,7 @@ type term =
   | TRec of var * var * term
   | TUnop of unop * term
   | TBinop of binop * term * term
+  | TRelop of relop * term * term
 
 type expr = { data : expr_data; label : label }
 
@@ -42,13 +47,15 @@ and expr_data =
   | ERec of var * var * expr
   | EUnop of unop * expr
   | EBinop of binop * expr * expr
+  | ERelop of relop * expr * expr
 
 let rec _app_labels (e : expr) : label list =
   match e.data with
   | EInt _ | EBool _ | EVar _ -> []
   | EApp (e1, e2) -> [ e.label ] @ _app_labels e1 @ _app_labels e2
   | EIf (e1, e2, e3) -> _app_labels e1 @ _app_labels e2 @ _app_labels e3
-  | ELet (_, e1, e2) | EBinop (_, e1, e2) -> _app_labels e1 @ _app_labels e2
+  | ELet (_, e1, e2) | EBinop (_, e1, e2) | ERelop (_, e1, e2) ->
+      _app_labels e1 @ _app_labels e2
   | ELam (_, e1) | ERec (_, _, e1) | EUnop (_, e1) -> _app_labels e1
 
 let rec _labels (e : expr) : label list =
@@ -57,7 +64,8 @@ let rec _labels (e : expr) : label list =
     | EInt _ | EBool _ | EVar _ -> []
     | EApp (e1, e2) -> _labels e1 @ _labels e2
     | EIf (e1, e2, e3) -> _labels e1 @ _labels e2 @ _labels e3
-    | ELet (_, e1, e2) | EBinop (_, e1, e2) -> _labels e1 @ _labels e2
+    | ELet (_, e1, e2) | EBinop (_, e1, e2) | ERelop (_, e1, e2) ->
+        _labels e1 @ _labels e2
     | ELam (_, e1) | ERec (_, _, e1) | EUnop (_, e1) -> _labels e1
   in
   e.label :: labs
@@ -72,7 +80,8 @@ let rec _vars_of_expr (e : expr) : var list =
   | EApp (e1, e2) -> _vars_of_expr e1 @ _vars_of_expr e2
   | EIf (e1, e2, e3) -> _vars_of_expr e1 @ _vars_of_expr e2 @ _vars_of_expr e3
   | ELet (x, e1, e2) -> [ x ] @ _vars_of_expr e1 @ _vars_of_expr e2
-  | EBinop (_, e1, e2) -> _vars_of_expr e1 @ _vars_of_expr e2
+  | EBinop (_, e1, e2) | ERelop (_, e1, e2) ->
+      _vars_of_expr e1 @ _vars_of_expr e2
   | ELam (x, e1) -> [ x ] @ _vars_of_expr e1
   | ERec (f, x, e1) -> [ f; x ] @ _vars_of_expr e1
   | EUnop (_, e1) -> _vars_of_expr e1
@@ -84,7 +93,7 @@ let rec free_vars_of_expr (e : expr) : VarSet.t =
   match e.data with
   | EInt _ | EBool _ -> VarSet.empty
   | EVar x -> VarSet.singleton x
-  | EApp (e1, e2) | EBinop (_, e1, e2) ->
+  | EApp (e1, e2) | EBinop (_, e1, e2) | ERelop (_, e1, e2) ->
       VarSet.union (free_vars_of_expr e1) (free_vars_of_expr e2)
   | EIf (e1, e2, e3) ->
       VarSet.union

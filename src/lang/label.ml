@@ -28,5 +28,6 @@ let rec attach_labels (t : term) : expr =
     | TRec (f, x, t) -> ERec (f, x, attach_labels t)
     | TUnop (op, t) -> EUnop (op, attach_labels t)
     | TBinop (op, t1, t2) -> EBinop (op, attach_labels t1, attach_labels t2)
+    | TRelop (op, t1, t2) -> ERelop (op, attach_labels t1, attach_labels t2)
   in
   { data = e; label = gen_label () }

@@ -49,7 +49,7 @@ module CallAnalysisMonotoneInstance : MonotoneInstance = struct
         [ (Lab (e.label, ci.cxt), cache e1.label ci.cxt) ]
     | _ -> []
 
-  let gen_flow_constraints = true
+  let gen_flow_constraints = FCAll
   let gen_var_constraints = false
 end
 
@@ -60,54 +60,96 @@ module _ = RegisterAnalysis (struct
 end)
 
 module IntegerConstantPropagationMonotoneInstance = struct
-  type t =
-    | Bot (* definitely not an integer *)
-    | Int of int (* exactly this integer *)
-    | Top (* at least 2 different integers *)
+  type tz =
+    | ZBot (* definitely not an integer *)
+    | ZInt of int (* exactly this integer *)
+    | ZTop (* at least 2 different integers *)
 
-  let to_string (z : t) : string =
-    match z with Bot -> "⊥" | Int i -> string_of_int i | Top -> "⊤"
+  module BoolSet = Set.Make (Bool)
 
+  type tb = BoolSet.t
+  type t = tz * tb
+
+  let to_string ((z, b) : t) : string =
+    let z_string =
+      match z with ZBot -> "⊥" | ZInt i -> string_of_int i | ZTop -> "⊤"
+    in
+    let b_string =
+      BoolSet.to_seq b
+      |> Seq.map (fun b -> match b with true -> "true" | false -> "false")
+      |> List.of_seq |> String.concat "," |> Printf.sprintf "{%s}"
+    in
+    Printf.sprintf "Z:%s B:%s" z_string b_string
+
+  let zbot = ZBot
+  let bbot = BoolSet.empty
+  let btop = [ true; false ] |> List.to_seq |> BoolSet.of_seq
   let to_funcset _ = failwith "internal error"
-  let bot _ = Bot
+  let bot _ = (zbot, bbot)
 
-  let join z1 z2 =
+  let zjoin z1 z2 =
     match (z1, z2) with
-    | Int n1, Int n2 when n1 = n2 -> Int n1
-    | Int _, Int _ | Top, _ | _, Top -> Top
-    | Bot, Int _ -> z2
-    | Int _, Bot -> z1
-    | Bot, Bot -> Bot
+    | ZInt n1, ZInt n2 when n1 = n2 -> ZInt n1
+    | ZInt _, ZInt _ | ZTop, _ | _, ZTop -> ZTop
+    | ZBot, ZInt _ -> z2
+    | ZInt _, ZBot -> z1
+    | ZBot, ZBot -> ZBot
 
-  let less_or_equal z1 z2 =
-    match (z1, z2) with
-    | _, Top | Bot, _ -> true
-    | Int n1, Int n2 when n1 = n2 -> true
-    | _, _ -> false
+  let bjoin = BoolSet.union
+  let join (z1, b1) (z2, b2) = (zjoin z1 z2, bjoin b1 b2)
 
-  let constraints (cfg : cfg) (e : expr) (st : t state) (ci : cxt_info) :
+  let less_or_equal (z1, b1) (z2, b2) =
+    (match (z1, z2) with
+    | _, ZTop | ZBot, _ -> true
+    | ZInt n1, ZInt n2 when n1 = n2 -> true
+    | _, _ -> false)
+    && BoolSet.subset b1 b2
+
+  let constraints (_ : cfg) (e : expr) (st : t state) (ci : cxt_info) :
       t changes =
     match e.data with
-    | EInt i -> [ (Lab (e.label, ci.cxt), Int i) ]
+    | EInt i -> [ (Lab (e.label, ci.cxt), (ZInt i, bbot)) ]
     | EUnop (_, _) -> []
     | EBinop (op, e1, e2) ->
-        [
-          ( Lab (e.label, ci.cxt),
-            match op with
-            | BINOP_Add -> (
-                match (cache st e1.label ci.cxt, cache st e2.label ci.cxt) with
-                | Bot, _ | _, Bot -> Bot
-                | Int n1, Int n2 -> Int (n1 + n2)
-                | _, _ -> Top)
-            | BINOP_Mul -> (
-                match (cache st e1.label ci.cxt, cache st e2.label ci.cxt) with
-                | Bot, _ | _, Bot -> Bot
-                | Int n1, Int n2 -> Int (n1 * n2)
-                | _, _ -> Top) );
-        ]
+        let z1, _ = cache st e1.label ci.cxt in
+        let z2, _ = cache st e2.label ci.cxt in
+        let z =
+          match (z1, z2) with
+          | ZBot, _ | _, ZBot -> ZBot
+          | ZInt n1, ZInt n2 -> (
+              match op with
+              | BINOP_Add -> ZInt (n1 + n2)
+              | BINOP_Sub -> ZInt (n1 - n2)
+              | BINOP_Mul -> ZInt (n1 * n2))
+          | _, _ -> ZTop
+        in
+        [ (Lab (e.label, ci.cxt), (z, bbot)) ]
+    | ERelop (op, e1, e2) ->
+        let z1, _ = cache st e1.label ci.cxt in
+        let z2, _ = cache st e2.label ci.cxt in
+        let b =
+          match (z1, z2) with
+          | ZBot, _ | _, ZBot -> bbot
+          | ZInt n1, ZInt n2 -> (
+              match op with
+              | RELOP_Gt -> BoolSet.singleton (n1 > n2)
+              | RELOP_Lt -> BoolSet.singleton (n1 < n2))
+          | _, _ -> btop
+        in
+        [ (Lab (e.label, ci.cxt), (zbot, b)) ]
+    (* Custom handle of the if *)
+    | EIf (e1, e2, e3) -> (
+        let _, b1 = cache st e1.label ci.cxt in
+        let c2 = (Lab (e.label, ci.cxt), cache st e2.label ci.cxt) in
+        let c3 = (Lab (e.label, ci.cxt), cache st e3.label ci.cxt) in
+        match (BoolSet.mem true b1, BoolSet.mem false b1) with
+        | true, true -> [ c2; c3 ]
+        | true, false -> [ c2 ]
+        | false, true -> [ c3 ]
+        | false, false -> [])
     | _ -> []
 
-  let gen_flow_constraints = true
+  let gen_flow_constraints = FCAllWithoutIf
   let gen_var_constraints = true
 end
 

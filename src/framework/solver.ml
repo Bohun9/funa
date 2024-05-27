@@ -79,21 +79,25 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
           | ELam (_, _) -> []
           | ERec (_, _, _) -> []
           | EUnop (_, _) -> []
-          | EBinop (_, _, _) -> [])
+          | EBinop (_, _, _) | ERelop (_, _, _) -> [])
         [] contexts
 
-    let implicit_flow_changes (e : expr) : MI.t changes =
+    let implicit_flow_changes (e : expr) (fcs : flow_constr_specifier) :
+        MI.t changes =
       List.fold_left
         (fun acc cxt ->
           acc
           @
           match e.data with
           | EInt _ | EBool _ | EVar _ | ELam (_, _) | ERec (_, _, _) -> []
-          | EIf (_, e2, e3) ->
-              [
-                (Lab (e.label, cxt), cache e2.label cxt);
-                (Lab (e.label, cxt), cache e3.label cxt);
-              ]
+          | EIf (_, e2, e3) -> (
+              match fcs with
+              | FCAll ->
+                  [
+                    (Lab (e.label, cxt), cache e2.label cxt);
+                    (Lab (e.label, cxt), cache e3.label cxt);
+                  ]
+              | _ -> [])
           | ELet (_, _, e2) -> [ (Lab (e.label, cxt), cache e2.label cxt) ]
           | EApp (e1, _) ->
               FuncSet.fold
@@ -101,7 +105,7 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
                   (Lab (e.label, cxt), cache e0.label (cxt_push cxt e.label))
                   :: acc)
                 (cache_cfg e1.label cxt) []
-          | EUnop (_, _) | EBinop (_, _, _) -> [])
+          | EUnop (_, _) | EBinop (_, _, _) | ERelop (_, _, _) -> [])
         [] contexts
 
     let implicit_app_changes (e : expr) : MI.t changes =
@@ -127,7 +131,9 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
         if MI.gen_var_constraints then implicit_var_changes e else []
       in
       let changes_implicit_flow =
-        if MI.gen_flow_constraints then implicit_flow_changes e else []
+        if match MI.gen_flow_constraints with FCNone -> false | _ -> true then
+          implicit_flow_changes e MI.gen_flow_constraints
+        else []
       in
       let changes_implicit = changes_implicit_var @ changes_implicit_flow in
       let changes_implicit_app = implicit_app_changes e in
@@ -136,7 +142,10 @@ module Solver (MI : MonotoneInstance) (Params : SolverParams) = struct
         | EInt _ | EBool _ | EVar _ -> []
         | EIf (e1, e2, e3) ->
             collect_changes e1 @ collect_changes e2 @ collect_changes e3
-        | ELet (_, e1, e2) | EApp (e1, e2) | EBinop (_, e1, e2) ->
+        | ELet (_, e1, e2)
+        | EApp (e1, e2)
+        | EBinop (_, e1, e2)
+        | ERelop (_, e1, e2) ->
             collect_changes e1 @ collect_changes e2
         | ELam (_, e1) | ERec (_, _, e1) | EUnop (_, e1) -> collect_changes e1
       in

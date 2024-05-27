@@ -37,6 +37,9 @@ type cxt_info = { cxt : context; push : label -> context }
 (* Type for a list of changes *)
 type 'a changes = (domain * 'a) list
 
+(* Type for specifying implicit flow constarints *)
+type flow_constr_specifier = FCAll | FCAllWithoutIf | FCNone
+
 module type MonotoneInstance = sig
   (* Type of elements of the lattice *)
   type t
@@ -64,7 +67,7 @@ module type MonotoneInstance = sig
      [Let x e1 e2] cache(l2) ⊆  cache(l)
      ...
   *)
-  val gen_flow_constraints : bool
+  val gen_flow_constraints : flow_constr_specifier
 
   (*
      [Var x]       env(x)    ⊆  cache(l)

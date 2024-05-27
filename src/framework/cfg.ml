@@ -39,6 +39,6 @@ module ControlFlowMonotoneInstance : MonotoneInstance = struct
           (cache e1.label ci.cxt) []
     | _ -> []
 
-  let gen_flow_constraints = true
+  let gen_flow_constraints = FCAll
   let gen_var_constraints = true
 end

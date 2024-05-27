@@ -62,6 +62,7 @@ struct
     | ELet (x, _, _) -> "let " ^ x
     | EApp (_, _) -> "app"
     | EBinop (op, _, _) -> binop_to_string op
+    | ERelop (op, _, _) -> relop_to_string op
     | EUnop (op, _) -> unop_to_string op
     | ELam (x, _) -> "fn " ^ x
     | ERec (f, x, _) -> Printf.sprintf "fn rec %s %s" f x
@@ -74,7 +75,8 @@ struct
     | EInt _ | EBool _ | EVar _ -> []
     | EIf (e1, e2, e3) ->
         build_node_list e1 @ build_node_list e2 @ build_node_list e3
-    | ELet (_, e1, e2) | EApp (e1, e2) | EBinop (_, e1, e2) ->
+    | ELet (_, e1, e2) | EApp (e1, e2) | EBinop (_, e1, e2) | ERelop (_, e1, e2)
+      ->
         build_node_list e1 @ build_node_list e2
     | ELam (_, e1) | ERec (_, _, e1) | EUnop (_, e1) -> build_node_list e1)
 
@@ -96,7 +98,7 @@ struct
         :: edge_stmt ~text:"in" e.label e2.label
         :: build_edge_list e1
         @ build_edge_list e2
-    | EApp (e1, e2) | EBinop (_, e1, e2) ->
+    | EApp (e1, e2) | EBinop (_, e1, e2) | ERelop (_, e1, e2) ->
         edge_stmt e.label e1.label :: edge_stmt e.label e2.label
         :: build_edge_list e1
         @ build_edge_list e2

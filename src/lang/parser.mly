@@ -11,7 +11,7 @@
 
 %token IF THEN ELSE FN REC LET IN
 %token LPAREN RPAREN
-%token OP_ASSIGN OP_ADD OP_MUL OP_ARROW
+%token OP_ASSIGN OP_ADD OP_MUL OP_MINUS OP_ARROW OP_GREATER OP_LESS
 
 %%
 
@@ -20,9 +20,18 @@ expr
   | FN REC IDENTIFIER IDENTIFIER OP_ARROW expr { TRec($3, $4, $6) }
   | LET IDENTIFIER OP_ASSIGN expr IN expr { TLet($2, $4, $6) }
   | IF expr THEN expr ELSE expr { TIf($2, $4, $6) }
+  | expr_rel { $1 }
+
+op_rel
+  : OP_GREATER { RELOP_Gt }
+  | OP_LESS { RELOP_Lt }
+
+expr_rel
+  : expr_add op_rel expr_add { TRelop($2, $1, $3) }
   | expr_add { $1 }
 
 op_add : OP_ADD { BINOP_Add }
+       | OP_MINUS { BINOP_Sub }
 op_mul : OP_MUL { BINOP_Mul }
 
 expr_add
